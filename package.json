@@ -1,8 +1,8 @@
 {
   "name": "whale-girl-hud",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "type": "module",
-  "description": "A cut-out whale-girl maid desktop pet in the corner; click her to see the account credit and running state.",
+  "description": "A cut-out whale-girl maid desktop pet in the corner; click her to see the account credit, drag her to move.",
   "license": "MIT",
   "keywords": [
     "dsh-plugin",
@@ -44,12 +44,12 @@
       ]
     }
   },
-"repository": {
-  "type": "git",
-  "url": "git+https://github.com/wrh-byte/Whale-girl-hud.git"
-},
-"homepage": "https://github.com/wrh-byte/Whale-girl-hud#readme",
-"bugs": {
-  "url": "https://github.com/wrh-byte/Whale-girl-hud/issues"
-}
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wrh-byte/Whale-girl-hud.git"
+  },
+  "homepage": "https://github.com/wrh-byte/Whale-girl-hud#readme",
+  "bugs": {
+    "url": "https://github.com/wrh-byte/Whale-girl-hud/issues"
+  }
 }

@@ -9,7 +9,7 @@ window.__ModuleLoader__.load({
     /** Plugin dictionary: the pet's visible words. */
     const EN = {
       pet: 'Whale Girl',
-      hint: 'Click the whale girl to see your credit',
+      hint: 'Click to see your credit, or drag to move',
       balance: 'Credit',
       running: 'Working',
       idle: 'Idle',
@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
     };
     const ZH = {
       pet: '小鲸鱼娘',
-      hint: '点击小鲸鱼娘查看额度',
+      hint: '点击查看额度，拖动可移动',
       balance: '额度',
       running: '运行中',
       idle: '空闲',
@@ -34,8 +34,9 @@ window.__ModuleLoader__.load({
 
     const CSS = `
 .wgp-root{position:fixed;right:18px;bottom:12px;z-index:40;display:flex;flex-direction:column;align-items:flex-end;gap:6px;pointer-events:auto}
-.wgp-pet{position:relative;width:150px;padding:0;border:0;background:transparent;cursor:pointer;outline:none;animation:wgp-float 6.4s ease-in-out infinite;will-change:transform;user-select:none}
+.wgp-pet{position:relative;width:150px;padding:0;border:0;background:transparent;cursor:grab;touch-action:none;outline:none;animation:wgp-float 6.4s ease-in-out infinite;will-change:transform;user-select:none}
 .wgp-pet--running{animation-duration:3.2s}
+.wgp-pet--dragging{cursor:grabbing;animation-play-state:paused}
 .wgp-pet__ground{position:absolute;left:20%;right:20%;bottom:3px;height:10px;border-radius:50%;background:rgba(8,24,56,.30);filter:blur(7px);pointer-events:none}
 .wgp-pet__image{position:relative;display:block;width:100%;height:auto;pointer-events:none;-webkit-user-drag:none;filter:drop-shadow(0 9px 14px rgba(8,24,56,.28));transition:filter .2s ease,transform .2s ease;transform-origin:50% 100%}
 .wgp-pet:hover .wgp-pet__image{filter:drop-shadow(0 11px 18px rgba(8,24,56,.34)) brightness(1.03);transform:scale(1.015)}
@@ -43,8 +44,12 @@ window.__ModuleLoader__.load({
 .wgp-pet__badge{position:absolute;left:4px;top:12px;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-base);font-size:13px;font-weight:700;line-height:1;box-shadow:0 3px 10px rgba(8,24,56,.35);transition:transform .18s ease}
 .wgp-pet:hover .wgp-pet__badge{transform:scale(1.08)}
 .wgp-pet__live{position:absolute;left:10px;bottom:16px;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-success-primary);box-shadow:0 0 0 2px var(--dsw-alias-bg-base);animation:wgp-pulse 1.6s ease-in-out infinite}
-.wgp-bubble{position:relative;width:216px;padding:12px;border-radius:14px;background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);box-shadow:0 20px 50px -18px rgba(8,24,56,.6);color:var(--dsw-alias-label-primary);animation:wgp-pop .16s ease-out}
+.wgp-bubble{position:absolute;right:0;bottom:calc(100% + 8px);width:216px;padding:12px;border-radius:14px;background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);box-shadow:0 20px 50px -18px rgba(8,24,56,.6);color:var(--dsw-alias-label-primary);animation:wgp-pop .16s ease-out}
 .wgp-bubble::after{content:'';position:absolute;right:30px;bottom:-6px;width:11px;height:11px;background:var(--dsw-alias-bg-overlay);border-right:1px solid var(--dsw-alias-border-l1);border-bottom:1px solid var(--dsw-alias-border-l1);transform:rotate(45deg);border-bottom-right-radius:2px}
+.wgp-bubble--below{top:calc(100% + 8px);bottom:auto}
+.wgp-bubble--below::after{top:-6px;bottom:auto;border-right:0;border-bottom:0;border-left:1px solid var(--dsw-alias-border-l1);border-top:1px solid var(--dsw-alias-border-l1)}
+.wgp-bubble--left{right:auto;left:0}
+.wgp-bubble--left::after{right:auto;left:30px}
 .wgp-bubble__head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .wgp-bubble__name{font-size:11px;color:var(--dsw-alias-label-secondary)}
 .wgp-bubble__close{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
@@ -120,11 +125,38 @@ window.__ModuleLoader__.load({
       );
     }
 
-    /** The pet: a corner illustration; clicking it opens the credit bubble. */
+    /** Local persistence for the pet's dragged position; viewport coordinates of its top-left. */
+    const POSITION_KEY = 'whale-girl-hud:pet-position';
+
+    function readStoredPosition() {
+      try {
+        const raw = window.localStorage.getItem(POSITION_KEY);
+        if (raw === null) return null;
+        const value = JSON.parse(raw);
+        if (value === null || typeof value !== 'object') return null;
+        if (!Number.isFinite(value.x) || !Number.isFinite(value.y)) return null;
+        return { x: value.x, y: value.y };
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function storePosition(position) {
+      try {
+        window.localStorage.setItem(POSITION_KEY, JSON.stringify(position));
+      } catch (_error) {}
+    }
+
+    /** The pet: a corner illustration; clicking it opens the credit bubble, dragging moves it. */
     function WhalePet(props) {
       const t = props.t;
       const [open, setOpen] = React.useState(false);
       const rootRef = React.useRef(null);
+      const [position, setPosition] = React.useState(null);
+      const [dragging, setDragging] = React.useState(false);
+      const dragRef = React.useRef(null);
+      const positionRef = React.useRef(null);
+      const lastDragEndRef = React.useRef(0);
       const account = props.useWhaleAccount((snapshot) => snapshot);
       // Root-scope slots expose the session collection, not the per-session hook: find the Session
       // rendered in the main view, then read its live running flag from the status map.
@@ -164,6 +196,34 @@ window.__ModuleLoader__.load({
       const status = running ? t('running') : t('idle');
       const label = [t('pet'), t('hint'), status].join(' ');
 
+      /** Keep the pet fully inside the viewport; the bubble is out of flow, so the root box is the pet. */
+      const clampPosition = (x, y) => {
+        const root = rootRef.current;
+        const margin = 8;
+        if (root === null) return { x: Math.max(margin, x), y: Math.max(margin, y) };
+        const rect = root.getBoundingClientRect();
+        const maxX = Math.max(margin, window.innerWidth - rect.width - margin);
+        const maxY = Math.max(margin, window.innerHeight - rect.height - margin);
+        return {
+          x: Math.min(Math.max(margin, x), maxX),
+          y: Math.min(Math.max(margin, y), maxY),
+        };
+      };
+
+      React.useLayoutEffect(() => {
+        const stored = readStoredPosition();
+        if (stored !== null) setPosition(clampPosition(stored.x, stored.y));
+        const onResize = () => {
+          setPosition((current) => (current === null ? current : clampPosition(current.x, current.y)));
+        };
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+      }, []);
+
+      React.useEffect(() => {
+        positionRef.current = position;
+      }, [position]);
+
       React.useEffect(() => {
         if (!open) return undefined;
         const interval = window.setInterval(() => {
@@ -197,9 +257,79 @@ window.__ModuleLoader__.load({
         }
       };
 
-      return h('div', { className: 'wgp-root', ref: rootRef },
+      const handleClick = () => {
+        // A drag ends with a click in some browsers; do not toggle the bubble for it.
+        if (Date.now() - lastDragEndRef.current < 300) return;
+        toggle();
+      };
+
+      const onPetPointerDown = (event) => {
+        if (event.isPrimary === false || event.button !== 0) return;
+        const root = rootRef.current;
+        if (root === null) return;
+        const rect = root.getBoundingClientRect();
+        dragRef.current = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          originX: rect.left,
+          originY: rect.top,
+          moved: false,
+        };
+        lastDragEndRef.current = 0;
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch (_error) {}
+      };
+
+      const onPetPointerMove = (event) => {
+        const drag = dragRef.current;
+        if (drag === null || drag.pointerId !== event.pointerId) return;
+        const dx = event.clientX - drag.startX;
+        const dy = event.clientY - drag.startY;
+        if (!drag.moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+        drag.moved = true;
+        setDragging(true);
+        const next = clampPosition(drag.originX + dx, drag.originY + dy);
+        positionRef.current = next;
+        setPosition(next);
+      };
+
+      const finishDrag = (event) => {
+        const drag = dragRef.current;
+        if (drag === null || drag.pointerId !== event.pointerId) return;
+        dragRef.current = null;
+        setDragging(false);
+        try {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        } catch (_error) {}
+        if (!drag.moved) return;
+        let next = positionRef.current;
+        if (event.type === 'pointerup' && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+          next = clampPosition(drag.originX + event.clientX - drag.startX, drag.originY + event.clientY - drag.startY);
+          positionRef.current = next;
+          setPosition(next);
+        }
+        if (next !== null) storePosition(next);
+        lastDragEndRef.current = Date.now();
+      };
+
+      const rootStyle = position === null ? undefined : {
+        left: position.x,
+        top: position.y,
+        right: 'auto',
+        bottom: 'auto',
+      };
+      const bubbleClass = 'wgp-bubble'
+        + (position !== null && position.y < 180 ? ' wgp-bubble--below' : '')
+        + (position !== null && position.x < 90 ? ' wgp-bubble--left' : '');
+      const petClass = 'wgp-pet'
+        + (running ? ' wgp-pet--running' : '')
+        + (dragging ? ' wgp-pet--dragging' : '');
+
+      return h('div', { className: 'wgp-root', ref: rootRef, style: rootStyle },
         h('style', { dangerouslySetInnerHTML: { __html: CSS } }),
-        open ? h('div', { className: 'wgp-bubble', role: 'group', 'aria-label': t('pet') },
+        open ? h('div', { className: bubbleClass, role: 'group', 'aria-label': t('pet') },
           h('div', { className: 'wgp-bubble__head' },
             h('span', { className: 'wgp-bubble__name' }, t('pet')),
             h('button', {
@@ -221,14 +351,18 @@ window.__ModuleLoader__.load({
           updated === null ? null : h('div', { className: 'wgp-bubble__foot' }, t('updated') + ' ' + updated)
         ) : null,
         h('div', {
-          className: 'wgp-pet' + (running ? ' wgp-pet--running' : ''),
+          className: petClass,
           role: 'button',
           tabIndex: 0,
           'aria-expanded': open ? 'true' : 'false',
           'aria-label': label,
           title: t('hint'),
-          onClick: toggle,
+          onClick: handleClick,
           onKeyDown,
+          onPointerDown: onPetPointerDown,
+          onPointerMove: onPetPointerMove,
+          onPointerUp: finishDrag,
+          onPointerCancel: finishDrag,
         },
           h('span', { className: 'wgp-pet__ground', 'aria-hidden': true }),
           h('img', { className: 'wgp-pet__image', src: PET_IMAGE, alt: '', draggable: false }),
