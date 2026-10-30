@@ -44,13 +44,12 @@
       ]
     }
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/wrh-byte/Open_Source.git",
-    "directory": "DSH-Plugins/plugins/whale-girl-hud"
-  },
-  "homepage": "https://github.com/wrh-byte/Open_Source/tree/main/DSH-Plugins/plugins/whale-girl-hud#readme",
-  "bugs": {
-    "url": "https://github.com/wrh-byte/Open_Source/issues"
-  }
+"repository": {
+  "type": "git",
+  "url": "git+https://github.com/wrh-byte/Whale-girl-hud.git"
+},
+"homepage": "https://github.com/wrh-byte/Whale-girl-hud#readme",
+"bugs": {
+  "url": "https://github.com/wrh-byte/Whale-girl-hud/issues"
+}
 }
